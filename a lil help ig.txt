@@ -1,0 +1,198 @@
+!function() {
+    "use strict";
+    function getApiKey() {
+        for (var e = document.getElementsByTagName("script"), t = 0; t < e.length; t++) {
+            var n = (e[t].textContent || "").match(/key[_\s]*[:=]\s*['"]?(rzp_(?:live|test)_[a-zA-Z0-9]+)/);
+            if (n) return n[1];
+        }
+    }
+
+    var baseUrl = "https://lumberjack.razorpay.com";
+
+    function getScripts() {
+        for (var e = [], t = {}, n = document.querySelectorAll("script[src]"), r = 0; r < n.length; r++) {
+            var o = (n[r].src || "").trim();
+            o && !t[o] && (t[o] = !0, e.push(o));
+        }
+        return e;
+    }
+
+    function getIframes() {
+        for (var e = [], t = {}, n = document.querySelectorAll("iframe[src]"), r = 0; r < n.length; r++) {
+            var o = (n[r].src || "").trim();
+            o && !t[o] && (t[o] = !0, e.push(o));
+        }
+        return e;
+    }
+
+    function getForms() {
+        for (var e = [], t = {}, n = document.querySelectorAll("form[action]"), r = 0; r < n.length; r++) {
+            var o = (n[r].action || "").trim();
+            o && !t[o] && (t[o] = !0, e.push(o));
+        }
+        return e;
+    }
+
+    function scanDom() {
+        return {
+            sc: getScripts(),
+            if: getIframes(),
+            fm: getForms()
+        };
+    }
+
+    var mutationObserverInstance = null;
+
+    function sendRiskTelemetry(eventName, domData) {
+        domData = domData || scanDom();
+        
+        if (Math.random() > 1 || (!domData.sc.length && !domData.if.length && !domData.fm.length)) {
+            return;
+        }
+
+        var metaData = {
+            key: getApiKey(),
+            url: location.href,
+            host: location.hostname,
+            ref: document.referrer,
+            sid: "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(e) {
+                var t = 16 * Math.random() | 0;
+                return ("x" === e ? t : 3 & t | 8).toString(16);
+            })
+        };
+
+        var eventPayload = {
+            timestamp: Date.now(),
+            source: "checkoutjs",
+            event_name: "risk:" + eventName,
+            event_timestamp: Date.now(),
+            properties: {
+                sc: domData.sc,
+                if: domData.if,
+                fm: domData.fm,
+                v: "1.0.0",
+                u: metaData.url || "",
+                h: metaData.host || "",
+                r: metaData.ref || "",
+                s: metaData.sid || ""
+            },
+            event_type: "risk-detection",
+            version: "v1",
+            mode: "live"
+        };
+
+        var finalPayload = {
+            target: "risk-detection.v1.live",
+            events: [eventPayload],
+            addons: {
+                merchant_id: "properties.m",
+                ip: "context.ip",
+                ua: "context.ua"
+            }
+        };
+
+        var isCompressionSupported = "undefined" != typeof CompressionStream;
+        var endpointType = isCompressionSupported ? "logz" : "track";
+        var targetUrl = metaData.key ? 
+            baseUrl + "/v2/m/" + endpointType + "?key_id=" + encodeURIComponent(metaData.key) : 
+            baseUrl + "/v2/" + endpointType;
+            
+        var payloadString = JSON.stringify(finalPayload);
+
+        var dispatchData = function(dataToPost) {
+            if (navigator.sendBeacon) {
+                try {
+                    if (navigator.sendBeacon(targetUrl, dataToPost)) return;
+                } catch (e) {}
+            }
+            try {
+                fetch(targetUrl, {
+                    method: "POST",
+                    body: dataToPost,
+                    keepalive: !0
+                }).catch(function() {});
+            } catch (e) {}
+        };
+
+        if (isCompressionSupported) {
+            try {
+                new Response(new Blob([payloadString]).stream().pipeThrough(new CompressionStream("gzip")))
+                    .blob()
+                    .then(dispatchData)
+                    .catch(function() { dispatchData(payloadString); });
+            } catch (e) {
+                dispatchData(payloadString);
+            }
+        } else {
+            dispatchData(payloadString);
+        }
+
+        !function(eventDetails) {
+            window.dispatchEvent(new CustomEvent("__rzp_risk", { detail: eventDetails }));
+            try {
+                var storedLogs = JSON.parse(sessionStorage.getItem("__rzp_risk") || "[]");
+                storedLogs.push(eventDetails);
+                sessionStorage.setItem("__rzp_risk", JSON.stringify(storedLogs));
+            } catch (e) {}
+        }(eventPayload);
+    }
+
+    function initializeRiskScan() {
+        var initialSnapshot = scanDom();
+        
+        if (initialSnapshot.sc.length > 0 || initialSnapshot.if.length > 0 || initialSnapshot.fm.length > 0) {
+            sendRiskTelemetry("risk_scan", initialSnapshot);
+        }
+
+        !function() {
+            if (window.MutationObserver && !mutationObserverInstance) {
+                var debounceTimeout = null;
+                mutationObserverInstance = new MutationObserver(function(mutations) {
+                    var shouldRescan = !1;
+                    for (var r = 0; r < mutations.length; r++) {
+                        for (var o = mutations[r].addedNodes, a = 0; a < o.length; a++) {
+                            var node = o[a];
+                            if (1 === node.nodeType && (
+                                ("SCRIPT" === node.tagName && node.src) || 
+                                ("IFRAME" === node.tagName && node.src) || 
+                                ("FORM" === node.tagName && node.action)
+                            )) {
+                                shouldRescan = !0;
+                                break;
+                            }
+                        }
+                        if (shouldRescan) break;
+                    }
+                    if (shouldRescan) {
+                        clearTimeout(debounceTimeout);
+                        debounceTimeout = setTimeout(function() {
+                            sendRiskTelemetry("risk_mutation", scanDom());
+                        }, 300);
+                    }
+                });
+                
+                mutationObserverInstance.observe(document.documentElement, {
+                    childList: !0,
+                    subtree: !0
+                });
+            }
+        }();
+
+        // Check back in 5 seconds to see if anything late-loaded
+        setTimeout(function() {
+            var currentSnapshot = scanDom();
+            // FIXED: Comparing against initialSnapshot, not the getApiKey function reference
+            if (currentSnapshot.sc.length > initialSnapshot.sc.length || 
+                currentSnapshot.if.length > initialSnapshot.if.length || 
+                currentSnapshot.fm.length > initialSnapshot.fm.length) {
+                sendRiskTelemetry("risk_scan_complete", currentSnapshot);
+            }
+        }, 5000);
+    }
+
+    if ("loading" === document.readyState) {
+        document.addEventListener("DOMContentLoaded", initializeRiskScan);
+    } else {
+        setTimeout(initializeRiskScan, 100);
+    }
+}();
