@@ -1,5 +1,5 @@
 # CBSE-Revaluation-payment-portal-patch
-# [VULN-TAG]: Client-Side Logic Error and Initialization Loop in Payment Gateway
+# Client-Side Logic Error and Initialization Loop in Payment Gateway
 
 - **Target / Product:** CBSE Re-evaluation Payment Portal
 - **Severity:** Medium (Availability Impact)
