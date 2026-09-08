@@ -31,8 +31,6 @@ The vulnerability stems from an initialization loop within the client-side JavaS
 
 ## 3. Proof of Concept (PoC) & Steps to Reproduce
 
-> **Note:** Keep all tokens, personal identifiable information (PII), and sensitive identifiers redacted. The fixed file is attached in repo.
-
 1. Authenticate into the CBSE portal using a standard student account during the re-evaluation application cycle.
 2. Proceed to the fee payment interface to initialize a checkout transaction.
 3. Observe the client-side execution loop utilizing the vulnerable risk-scanning script.
