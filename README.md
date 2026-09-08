@@ -63,3 +63,5 @@ To ensure platform stability, implement the following technical patches:
 - **2026-05-19:** Did cause analysis; Noticed the conflicting variable in the client-side JavaScript.
 - **2026-05-19-9:39AM:** Developed functional code patch and submitted a structured bug report via email to the CBSE IT Directorate.
 - **2026-05-25~26:** Technical patch applied to ensure platform stability for students.
+
+## **SIDE NOTE:** I also was able to log onto other students profile and access to personal data of many students , this was later on fixed within a week , alongside that when CBSE was conduction Trials on OSM Portal , got to Bypass That and see test copies and test Marking, Same reported to school , No-Action taken. Still I haven't received refund of my INR 400 + INR 600 as my marks Increased in Re-Evaluation even aster many mails no-repley.
